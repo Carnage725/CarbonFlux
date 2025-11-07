@@ -3,10 +3,18 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 from typing import List, Tuple
 
-def generate_solar_forecast(start: datetime, days_history: int, hours_future: int) -> List[Tuple]:
+def generate_solar_forecast(start: datetime, days_history: int, hours_future: int, scenario: str = "clear") -> List[Tuple]:
     """Generate solar forecast with p5/p50/p95 percentiles"""
     total_minutes = (days_history * 24 * 60) + (hours_future * 60)
     times = [start + timedelta(minutes=i) for i in range(-days_history * 24 * 60, hours_future * 60)]
+
+    # Scenario-specific parameters
+    if scenario == "cloudy":
+        cloud_min, cloud_max = 0.5, 0.7  # Heavy clouds
+    elif scenario == "heatwave":
+        cloud_min, cloud_max = 0.85, 1.0  # Clear skies, more heat
+    else:  # clear or maintenance
+        cloud_min, cloud_max = 0.7, 1.0
 
     data = []
     for t in times:
@@ -14,8 +22,8 @@ def generate_solar_forecast(start: datetime, days_history: int, hours_future: in
         # Clipped sinusoid: solar peak at noon
         base = max(0, np.sin((hour - 6) * np.pi / 12)) * 1000  # 0-1000 kW
 
-        # Add cloud attenuation (random)
-        cloud_factor = np.random.uniform(0.7, 1.0)
+        # Add cloud attenuation (scenario-dependent)
+        cloud_factor = np.random.uniform(cloud_min, cloud_max)
         value_kw = base * cloud_factor
 
         # Percentiles with uncertainty
@@ -42,10 +50,18 @@ def generate_green_windows(start: datetime, days: int) -> List[Tuple]:
 
     return windows
 
-def generate_salt_state(start: datetime, days_history: int, hours_future: int) -> List[Tuple]:
+def generate_salt_state(start: datetime, days_history: int, hours_future: int, scenario: str = "clear") -> List[Tuple]:
     """Generate molten-salt storage state with SOC and temps"""
     total_minutes = (days_history * 24 * 60) + (hours_future * 60)
     times = [start + timedelta(minutes=i) for i in range(-days_history * 24 * 60, hours_future * 60)]
+
+    # Scenario-specific parameters
+    if scenario == "heatwave":
+        heat_loss_multiplier = 1.5  # 50% more heat loss
+        temp_offset = 10  # Hotter ambient temps
+    else:
+        heat_loss_multiplier = 1.0
+        temp_offset = 0
 
     data = []
     soc = 5.0  # Start at 5 MWh
@@ -62,9 +78,9 @@ def generate_salt_state(start: datetime, days_history: int, hours_future: int) -
             soc = max(0.0, soc - discharge_rate)
 
         # Temps track SOC with noise
-        temp_hot = 565 + (soc / 10.0) * 20 + np.random.normal(0, 2)
-        temp_cold = 290 + (soc / 10.0) * 5 + np.random.normal(0, 1)
-        heat_loss = 10 + (soc / 10.0) * 5  # kW loss increases with charge
+        temp_hot = 565 + (soc / 10.0) * 20 + np.random.normal(0, 2) + temp_offset
+        temp_cold = 290 + (soc / 10.0) * 5 + np.random.normal(0, 1) + temp_offset
+        heat_loss = (10 + (soc / 10.0) * 5) * heat_loss_multiplier  # kW loss increases with charge
 
         data.append((t, soc, temp_hot, temp_cold, heat_loss))
 
@@ -97,13 +113,21 @@ def generate_dispatch_plan(start: datetime, hours: int) -> List[Tuple]:
 
     return data
 
-def generate_algae_telemetry(start: datetime, days_history: int, hours_future: int) -> List[Tuple]:
+def generate_algae_telemetry(start: datetime, days_history: int, hours_future: int, scenario: str = "clear") -> List[Tuple]:
     """Generate bioreactor telemetry with day/night patterns"""
     total_minutes = (days_history * 24 * 60) + (hours_future * 60)
     times = [start + timedelta(minutes=i) for i in range(-days_history * 24 * 60, hours_future * 60)]
 
+    # Scenario-specific parameters
+    if scenario == "maintenance":
+        capacity_factor = 0.6  # 40% reduced capacity
+        biomass_start = 1.5
+    else:
+        capacity_factor = 1.0
+        biomass_start = 2.0
+
     data = []
-    biomass = 2.0  # g/L
+    biomass = biomass_start  # g/L
 
     for t in times:
         hour = t.hour + t.minute / 60.0
@@ -122,10 +146,10 @@ def generate_algae_telemetry(start: datetime, days_history: int, hours_future: i
         temp_c = 26 if is_day else 24
         temp_c += np.random.normal(0, 1)
 
-        # CO2 uptake: peaks during day, respiration at night
+        # CO2 uptake: peaks during day, respiration at night (scaled by capacity)
         if is_day:
-            co2_uptake_kg_h = 0.8 + np.random.uniform(-0.1, 0.2)
-            biomass += 0.0001  # Growth
+            co2_uptake_kg_h = (0.8 + np.random.uniform(-0.1, 0.2)) * capacity_factor
+            biomass += 0.0001 * capacity_factor  # Growth
         else:
             co2_uptake_kg_h = -0.2 + np.random.uniform(-0.05, 0.05)  # Respiration
 
@@ -158,7 +182,7 @@ def generate_carbon_ledger(start: datetime, days_history: int) -> List[Tuple]:
 
     return data
 
-async def seed_all_data(reset: bool = False):
+async def seed_all_data(reset: bool = False, scenario: str = "clear"):
     """Seed all tables with realistic data"""
     from .connection import get_pool
     from .init_db import clear_database
@@ -170,8 +194,8 @@ async def seed_all_data(reset: bool = False):
 
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
-    print("Seeding forecast_solar...")
-    solar_data = generate_solar_forecast(now, days_history=30, hours_future=72)
+    print(f"Seeding forecast_solar (scenario={scenario})...")
+    solar_data = generate_solar_forecast(now, days_history=30, hours_future=72, scenario=scenario)
     await pool.executemany(
         "INSERT INTO forecast_solar (time, value_kw, p5, p50, p95) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (time) DO NOTHING",
         solar_data
@@ -184,8 +208,8 @@ async def seed_all_data(reset: bool = False):
         windows_data
     )
 
-    print("Seeding salt_state...")
-    salt_data = generate_salt_state(now, days_history=30, hours_future=72)
+    print(f"Seeding salt_state (scenario={scenario})...")
+    salt_data = generate_salt_state(now, days_history=30, hours_future=72, scenario=scenario)
     await pool.executemany(
         "INSERT INTO salt_state (time, soc_mwh, temp_hot_c, temp_cold_c, heat_loss_kw) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (time) DO NOTHING",
         salt_data
@@ -198,8 +222,8 @@ async def seed_all_data(reset: bool = False):
         dispatch_data
     )
 
-    print("Seeding algae_telemetry...")
-    algae_data = generate_algae_telemetry(now, days_history=30, hours_future=72)
+    print(f"Seeding algae_telemetry (scenario={scenario})...")
+    algae_data = generate_algae_telemetry(now, days_history=30, hours_future=72, scenario=scenario)
     await pool.executemany(
         "INSERT INTO algae_telemetry (time, ph, do_mg_l, temp_c, co2_uptake_kg_h, biomass_g_l) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (time) DO NOTHING",
         algae_data

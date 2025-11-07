@@ -7,6 +7,7 @@ from app.db.connection import get_pool, close_pool
 from app.db.init_db import init_database
 from app.db.seeders import seed_all_data
 from app.routers import admin, forecast, salt, dispatch, algae, carbon
+from app.background_tasks import start_background_tasks, stop_background_tasks
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,10 +21,14 @@ async def lifespan(app: FastAPI):
         print("🌱 Auto-seeding database...")
         await seed_all_data(reset=False)
 
+    # Start background tasks
+    await start_background_tasks()
+
     yield
 
     # Shutdown
     print("👋 Shutting down...")
+    await stop_background_tasks()
     await close_pool()
 
 app = FastAPI(

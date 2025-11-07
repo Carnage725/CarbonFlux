@@ -1,14 +1,22 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from datetime import datetime, timedelta, timezone
 from typing import List
 from ..db.connection import get_pool
 from ..models.schemas import SolarForecastResponse, SolarForecastPoint, GreenWindowsResponse, GreenWindow
+from .. import cache
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 @router.get("/solar", response_model=SolarForecastResponse)
-async def get_solar_forecast():
+async def get_solar_forecast(response: Response):
     """Get solar forecast with 5-15min nowcast and 24-72h horizon"""
+    # Check cache
+    cache_key = "forecast_solar"
+    cached = cache.get(cache_key)
+    if cached:
+        response.headers["X-Cache"] = "HIT"
+        return cached
+
     pool = await get_pool()
     now = datetime.now(timezone.utc)
 
@@ -33,15 +41,28 @@ async def get_solar_forecast():
     nowcast = [SolarForecastPoint(**dict(row)) for row in nowcast_rows]
     forecast = [SolarForecastPoint(**dict(row)) for row in forecast_rows]
 
-    return SolarForecastResponse(
+    result = SolarForecastResponse(
         nowcast=nowcast,
         forecast=forecast,
         generated_at=now
     )
 
+    # Cache the result
+    cache.set(cache_key, result)
+    response.headers["X-Cache"] = "MISS"
+
+    return result
+
 @router.get("/green-windows", response_model=GreenWindowsResponse)
-async def get_green_windows():
+async def get_green_windows(response: Response):
     """Get low-carbon energy windows for next 72 hours"""
+    # Check cache
+    cache_key = "forecast_green_windows"
+    cached = cache.get(cache_key)
+    if cached:
+        response.headers["X-Cache"] = "HIT"
+        return cached
+
     pool = await get_pool()
     now = datetime.now(timezone.utc)
     end_time = now + timedelta(hours=72)
@@ -58,7 +79,13 @@ async def get_green_windows():
 
     windows = [GreenWindow(**dict(row)) for row in rows]
 
-    return GreenWindowsResponse(
+    result = GreenWindowsResponse(
         windows=windows,
         count=len(windows)
     )
+
+    # Cache the result
+    cache.set(cache_key, result)
+    response.headers["X-Cache"] = "MISS"
+
+    return result
