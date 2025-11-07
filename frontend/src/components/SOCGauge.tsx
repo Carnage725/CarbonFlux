@@ -65,7 +65,7 @@ export default function SOCGauge({ soc, socMwh, capacity }: Props) {
       .attrTween('d', () => {
         const interpolate = d3.interpolate(0, (soc / 100) * 2 * Math.PI)
         return (t: number) => {
-          return foregroundArc.endAngle(interpolate(t))() as string
+          return foregroundArc.endAngle(interpolate(t))(null as any) as string
         }
       })
 

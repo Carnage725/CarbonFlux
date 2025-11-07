@@ -34,7 +34,7 @@ export default function ReactorConsole() {
   }, [])
 
   // SSE stream for live updates
-  const { data: sseData, isConnected } = useSSE(
+  const { isConnected } = useSSE(
     `${import.meta.env.VITE_API_BASE || 'http://localhost:8000'}/algae/telemetry/stream`,
     {
       onMessage: (data) => {
