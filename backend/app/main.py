@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from app.db.connection import get_pool, close_pool
 from app.db.init_db import init_database
 from app.db.seeders import seed_all_data
-from app.routers import admin
+from app.routers import admin, forecast, salt, dispatch, algae, carbon
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,6 +44,11 @@ app.add_middleware(
 
 # Routers
 app.include_router(admin.router)
+app.include_router(forecast.router)
+app.include_router(salt.router)
+app.include_router(dispatch.router)
+app.include_router(algae.router)
+app.include_router(carbon.router)
 
 @app.get("/")
 async def root():
