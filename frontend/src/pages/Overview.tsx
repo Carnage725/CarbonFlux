@@ -1,4 +1,52 @@
+import { useQuery } from '@tanstack/react-query'
+import { endpoints } from '../lib/api'
+import FlowDiagram from '../components/FlowDiagram'
+import SOCGauge from '../components/SOCGauge'
+import CarbonTicker from '../components/CarbonTicker'
+
 export default function Overview() {
+  // Fetch data with auto-refresh every 5 seconds
+  const { data: saltData } = useQuery({
+    queryKey: ['saltState'],
+    queryFn: endpoints.saltState,
+    refetchInterval: 5000,
+  })
+
+  const { data: dispatchData } = useQuery({
+    queryKey: ['dispatchPlan'],
+    queryFn: endpoints.dispatchPlan,
+    refetchInterval: 5000,
+  })
+
+  const { data: carbonData } = useQuery({
+    queryKey: ['carbonLedger'],
+    queryFn: endpoints.carbonLedger,
+    refetchInterval: 5000,
+  })
+
+  const { data: solarData } = useQuery({
+    queryKey: ['solarForecast'],
+    queryFn: endpoints.solarForecast,
+    refetchInterval: 5000,
+  })
+
+  // Calculate current solar output (latest nowcast point)
+  const currentSolar = solarData?.nowcast?.[solarData.nowcast.length - 1]?.value_kw || 0
+
+  // Calculate current charge/discharge from dispatch plan
+  const currentDispatch = dispatchData?.plan?.[0] || { charge_kw: 0, discharge_kw: 0 }
+
+  // Calculate load (discharge to algae)
+  const currentLoad = currentDispatch.discharge_kw
+
+  // Get SOC data
+  const soc = saltData?.soc_percent || 0
+  const socMwh = saltData?.current?.soc_mwh || 0
+
+  // Get carbon data
+  const cumulativeCO2 = carbonData?.cumulative_net_kg || 0
+  const dailyNet = carbonData?.daily?.[0]?.total_co2_net_kg || 0
+
   return (
     <div className="space-y-6">
       <div>
@@ -11,29 +59,45 @@ export default function Overview() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass-panel p-6">
           <h3 className="text-lg font-semibold mb-2">Solar Generation</h3>
-          <div className="text-3xl font-bold text-primary-400">847 kW</div>
+          <div className="text-3xl font-bold text-primary-400">
+            {currentSolar.toFixed(0)} kW
+          </div>
           <div className="text-sm text-slate-400 mt-1">Current output</div>
         </div>
 
         <div className="glass-panel p-6">
           <h3 className="text-lg font-semibold mb-2">Storage SOC</h3>
-          <div className="text-3xl font-bold text-emerald-400">78%</div>
-          <div className="text-sm text-slate-400 mt-1">7.82 / 10 MWh</div>
+          <div className="text-3xl font-bold text-emerald-400">{soc.toFixed(0)}%</div>
+          <div className="text-sm text-slate-400 mt-1">{socMwh.toFixed(2)} / 10 MWh</div>
         </div>
 
         <div className="glass-panel p-6">
           <h3 className="text-lg font-semibold mb-2">CO₂ Captured</h3>
-          <div className="text-3xl font-bold text-green-400">936 kg</div>
+          <div className="text-3xl font-bold text-green-400">{cumulativeCO2.toFixed(0)} kg</div>
           <div className="text-sm text-slate-400 mt-1">Cumulative</div>
         </div>
       </div>
 
-      <div className="glass-panel p-6">
-        <h3 className="text-xl font-semibold mb-4">System Flow</h3>
-        <div className="h-64 flex items-center justify-center text-slate-500">
-          D3 Sankey Flow Diagram (Phase 5)
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-panel p-6">
+          <h3 className="text-xl font-semibold mb-4">System Flow</h3>
+          <FlowDiagram
+            data={{
+              solar: currentSolar,
+              charge: currentDispatch.charge_kw,
+              discharge: currentDispatch.discharge_kw,
+              load: currentLoad,
+            }}
+          />
+        </div>
+
+        <div className="glass-panel p-6">
+          <h3 className="text-xl font-semibold mb-4">Storage State of Charge</h3>
+          <SOCGauge soc={soc} socMwh={socMwh} capacity={10} />
         </div>
       </div>
+
+      <CarbonTicker cumulative={cumulativeCO2} dailyNet={dailyNet} ratePerHour={dailyNet / 24} />
     </div>
   )
 }
