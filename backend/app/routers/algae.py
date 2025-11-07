@@ -3,10 +3,21 @@ from fastapi.responses import StreamingResponse
 from datetime import datetime, timedelta, timezone
 import asyncio
 import json
+from pydantic import BaseModel
 from ..db.connection import get_pool
 from ..models.schemas import AlgaeTelemetryResponse, AlgaeTelemetryPoint
 
 router = APIRouter(prefix="/algae", tags=["algae"])
+
+# Control action state (in-memory for demo)
+control_state = {
+    "degas_active": False,
+    "aerate_active": False,
+    "night_mode": False
+}
+
+class ControlRequest(BaseModel):
+    action: str  # "degas", "aerate", "night_mode"
 
 @router.get("/telemetry", response_model=AlgaeTelemetryResponse)
 async def get_algae_telemetry(
@@ -76,3 +87,47 @@ async def stream_algae_telemetry():
             "X-Accel-Buffering": "no"
         }
     )
+
+@router.post("/control")
+async def control_reactor(request: ControlRequest):
+    """Control reactor operations - triggers temporary parameter changes"""
+    action = request.action.lower()
+
+    # Reset all states first
+    for key in control_state:
+        control_state[key] = False
+
+    # Activate requested action
+    if action == "degas":
+        control_state["degas_active"] = True
+        # In a real system, this would trigger a temporary DO reduction
+        # For demo, we'll modify the SSE stream behavior
+        return {
+            "success": True,
+            "action": "degas",
+            "message": "Degassing initiated - DO will decrease temporarily",
+            "duration_seconds": 30
+        }
+    elif action == "aerate":
+        control_state["aerate_active"] = True
+        return {
+            "success": True,
+            "action": "aerate",
+            "message": "Aeration burst initiated - DO will increase temporarily",
+            "duration_seconds": 30
+        }
+    elif action == "night_mode":
+        control_state["night_mode"] = True
+        return {
+            "success": True,
+            "action": "night_mode",
+            "message": "Night mode activated - CO2 uptake reduced",
+            "duration_seconds": 60
+        }
+    else:
+        return {
+            "success": False,
+            "action": action,
+            "message": f"Unknown action: {action}",
+            "valid_actions": ["degas", "aerate", "night_mode"]
+        }
