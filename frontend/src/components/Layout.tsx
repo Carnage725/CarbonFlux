@@ -1,7 +1,12 @@
+import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import LiveIndicator from './LiveIndicator'
+import ApiStatusIndicator from './ApiStatusIndicator'
+import DemoController from './DemoController'
 
 export default function Layout() {
+  const [showDemo, setShowDemo] = useState(false)
+
   const navItems = [
     { to: '/', label: 'Overview', icon: '⚡' },
     { to: '/thermal', label: 'Thermal Twin', icon: '🔥' },
@@ -42,14 +47,30 @@ export default function Layout() {
               <span>Status: <span className="text-primary-400">Operational</span></span>
               <LiveIndicator />
             </div>
+            <ApiStatusIndicator />
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 p-6 overflow-auto">
+        {/* Demo Button */}
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setShowDemo(true)}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg
+                     font-medium transition-colors flex items-center gap-2 text-sm"
+          >
+            <span>🎭</span>
+            Demo
+          </button>
+        </div>
+
         <Outlet />
       </main>
+
+      {/* Demo Controller */}
+      <DemoController isOpen={showDemo} onClose={() => setShowDemo(false)} />
     </div>
   )
 }

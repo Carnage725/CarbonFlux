@@ -1,20 +1,60 @@
+import { OfflineStorage } from './offlineStorage'
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export const api = {
-  async get(path: string) {
-    const response = await fetch(`${API_BASE}${path}`)
-    if (!response.ok) throw new Error(`API error: ${response.statusText}`)
-    return response.json()
+  async get(path: string, context?: string) {
+    try {
+      const response = await fetch(`${API_BASE}${path}`)
+      if (!response.ok) throw new Error(`API error: ${response.statusText}`)
+      const data = await response.json()
+
+      // Cache successful responses for offline use
+      if (context) {
+        OfflineStorage.cacheData(context, data)
+      }
+
+      return data
+    } catch (error) {
+      // Try to return cached data if available
+      if (context) {
+        const cachedData = OfflineStorage.getCachedData(context)
+        if (cachedData) {
+          console.info(`Returning cached data for ${context}`)
+          return cachedData
+        }
+      }
+      throw error
+    }
   },
 
-  async post(path: string, data?: unknown) {
-    const response = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: data ? JSON.stringify(data) : undefined,
-    })
-    if (!response.ok) throw new Error(`API error: ${response.statusText}`)
-    return response.json()
+  async post(path: string, data?: unknown, context?: string) {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: data ? JSON.stringify(data) : undefined,
+      })
+      if (!response.ok) throw new Error(`API error: ${response.statusText}`)
+      const responseData = await response.json()
+
+      // Cache successful responses for offline use
+      if (context) {
+        OfflineStorage.cacheData(context, responseData)
+      }
+
+      return responseData
+    } catch (error) {
+      // Try to return cached data if available
+      if (context) {
+        const cachedData = OfflineStorage.getCachedData(context)
+        if (cachedData) {
+          console.info(`Returning cached data for ${context}`)
+          return cachedData
+        }
+      }
+      throw error
+    }
   },
 }
 
@@ -49,14 +89,14 @@ export const downloadFile = async (path: string, defaultFilename: string) => {
 
 // API endpoints
 export const endpoints = {
-  healthCheck: () => api.get('/healthz'),
-  solarForecast: () => api.get('/forecast/solar'),
-  greenWindows: () => api.get('/forecast/green-windows'),
-  saltState: () => api.get('/salt/state'),
-  dispatchPlan: () => api.post('/dispatch/plan'),
-  algaeTelemetry: (hours = 24) => api.get(`/algae/telemetry?hours=${hours}`),
-  carbonLedger: () => api.get('/carbon/ledger'),
-  switchScenario: (type: string) => api.post(`/admin/scenario?type=${type}`),
+  healthCheck: () => api.get('/healthz', 'health'),
+  solarForecast: () => api.get('/forecast/solar', 'solar-forecast'),
+  greenWindows: () => api.get('/forecast/green-windows', 'green-windows'),
+  saltState: () => api.get('/salt/state', 'salt-state'),
+  dispatchPlan: () => api.post('/dispatch/plan', undefined, 'dispatch-plan'),
+  algaeTelemetry: (hours = 24) => api.get(`/algae/telemetry?hours=${hours}`, 'algae-telemetry'),
+  carbonLedger: () => api.get('/carbon/ledger', 'carbon-ledger'),
+  switchScenario: (type: string) => api.post(`/admin/scenario?type=${type}`, { type }, 'scenario-switch'),
   demoBigData: (points = 100000, type = 'solar', hours = 72) =>
-    api.get(`/demo/big?points=${points}&type=${type}&hours=${hours}`),
+    api.get(`/demo/big?points=${points}&type=${type}&hours=${hours}`, 'demo-big-data'),
 }
