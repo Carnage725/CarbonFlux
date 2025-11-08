@@ -1,4 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
+import LiveIndicator from './LiveIndicator'
 
 export default function Layout() {
   const navItems = [
@@ -35,9 +36,12 @@ export default function Layout() {
         </nav>
 
         <div className="mt-auto pt-6 border-t border-slate-700">
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 space-y-2">
             <div>v0.1.0</div>
-            <div className="mt-1">Status: <span className="text-primary-400">Operational</span></div>
+            <div className="flex items-center justify-between">
+              <span>Status: <span className="text-primary-400">Operational</span></span>
+              <LiveIndicator />
+            </div>
           </div>
         </div>
       </aside>

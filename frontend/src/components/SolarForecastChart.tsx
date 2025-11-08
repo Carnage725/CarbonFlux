@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as d3 from 'd3'
+import { smartDecimation } from '../lib/decimation'
 
 interface ForecastPoint {
   time: string
@@ -41,10 +42,15 @@ export default function SolarForecastChart({ forecast, greenWindows = [] }: Prop
 
     // Parse times
     const parseTime = (t: string) => new Date(t)
-    const parsedData = forecast.map((d) => ({
+    let parsedData = forecast.map((d) => ({
       ...d,
       parsedTime: parseTime(d.time),
     }))
+
+    // Apply data decimation for performance (reduce to max 1000 points)
+    if (parsedData.length > 1000) {
+      parsedData = smartDecimation(parsedData, 1000, 'p50') as typeof parsedData // Use p50 as the value for decimation
+    }
 
     // Scales
     const xScale = d3

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as d3 from 'd3'
+import { smartDecimation } from '../lib/decimation'
 
 interface DataPoint {
   time: string
@@ -31,10 +32,15 @@ export default function DOChart({ data }: Props) {
 
     // Parse times
     const parseTime = (t: string) => new Date(t)
-    const parsedData = data.map((d) => ({
+    let parsedData = data.map((d) => ({
       ...d,
       parsedTime: parseTime(d.time),
     }))
+
+    // Apply data decimation for performance (reduce to max 500 points for smaller charts)
+    if (parsedData.length > 500) {
+      parsedData = smartDecimation(parsedData, 500, 'do_mg_l') as typeof parsedData
+    }
 
     // Scales
     const xScale = d3

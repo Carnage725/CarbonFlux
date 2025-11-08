@@ -57,4 +57,6 @@ export const endpoints = {
   algaeTelemetry: (hours = 24) => api.get(`/algae/telemetry?hours=${hours}`),
   carbonLedger: () => api.get('/carbon/ledger'),
   switchScenario: (type: string) => api.post(`/admin/scenario?type=${type}`),
+  demoBigData: (points = 100000, type = 'solar', hours = 72) =>
+    api.get(`/demo/big?points=${points}&type=${type}&hours=${hours}`),
 }

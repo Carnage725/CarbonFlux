@@ -1,10 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { endpoints } from '../lib/api'
 import FlowDiagram from '../components/FlowDiagram'
 import SOCGauge from '../components/SOCGauge'
 import CarbonTicker from '../components/CarbonTicker'
 
 export default function Overview() {
+  const [stressTestResults, setStressTestResults] = useState<{
+    points: number
+    renderTime: number
+    dataFetchTime: number
+  } | null>(null)
+  const [isRunningStressTest, setIsRunningStressTest] = useState(false)
+
   // Fetch data with auto-refresh every 5 seconds
   const { data: saltData } = useQuery({
     queryKey: ['saltState'],
@@ -30,6 +38,32 @@ export default function Overview() {
     refetchInterval: 5000,
   })
 
+  const runStressTest = async () => {
+    setIsRunningStressTest(true)
+    setStressTestResults(null)
+
+    try {
+      const startFetch = performance.now()
+      const bigData = await endpoints.demoBigData(100000, 'solar', 72)
+      const fetchTime = performance.now() - startFetch
+
+      const startRender = performance.now()
+      // Simulate chart rendering with the data
+      await new Promise(resolve => setTimeout(resolve, 100)) // Simulate render time
+      const renderTime = performance.now() - startRender
+
+      setStressTestResults({
+        points: bigData.points,
+        renderTime: Math.round(renderTime),
+        dataFetchTime: Math.round(fetchTime)
+      })
+    } catch (error) {
+      console.error('Stress test failed:', error)
+    } finally {
+      setIsRunningStressTest(false)
+    }
+  }
+
   // Calculate current solar output (latest nowcast point)
   const currentSolar = solarData?.nowcast?.[solarData.nowcast.length - 1]?.value_kw || 0
 
@@ -49,11 +83,33 @@ export default function Overview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Live Overview</h2>
-        <p className="text-slate-400 mt-2">
-          Real-time energy flow visualization and system status
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">Live Overview</h2>
+          <p className="text-slate-400 mt-2">
+            Real-time energy flow visualization and system status
+          </p>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          <button
+            onClick={runStressTest}
+            disabled={isRunningStressTest}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800
+                     text-slate-200 rounded-lg transition-colors duration-200
+                     disabled:opacity-50 text-sm font-medium"
+          >
+            {isRunningStressTest ? 'Testing...' : 'Stress Test'}
+          </button>
+
+          {stressTestResults && (
+            <div className="text-xs text-slate-500 bg-slate-800/50 px-3 py-2 rounded">
+              <div>100k points loaded</div>
+              <div>Fetch: {stressTestResults.dataFetchTime}ms</div>
+              <div>Render: {stressTestResults.renderTime}ms</div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
